@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatBot // chatbot.py</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;700&display=swap');
+
+  :root{
+    --bg:            #16110c;
+    --panel:         #1d1712;
+    --panel-raised:  #241c15;
+    --amber:         #ffb02e;
+    --amber-dim:     #c98a2c;
+    --amber-faint:   #6b5330;
+    --cream:         #f3ead9;
+    --line:          #3a2f22;
+    --red-led:       #ff5f56;
+    --green-led:     #27c93f;
+    --yellow-led:    #ffbd2e;
+    --font-mono:     'IBM Plex Mono', ui-monospace, monospace;
+    --font-display:  'Space Grotesk', sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse at 50% -10%, #2a2015 0%, var(--bg) 55%);
+    color:var(--cream);
+    font-family:var(--font-mono);
+    min-height:100vh;
+    padding:48px 20px 80px;
+  }
+
+  /* subtle scanline / crt texture over the whole page */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,176,46,0.025) 0px,
+      rgba(255,176,46,0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    z-index:5;
+    mix-blend-mode:overlay;
+  }
+
+  .wrap{ max-width:920px; margin:0 auto; }
+
+  /* ---------- header ---------- */
+  header{ margin-bottom:34px; }
+  .eyebrow{
+    font-size:12px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--amber-dim); margin:0 0 10px;
+  }
+  h1{
+    font-family:var(--font-display);
+    font-size:clamp(28px,4.4vw,42px);
+    margin:0 0 8px;
+    color:var(--cream);
+    letter-spacing:-0.01em;
+  }
+  h1 span{ color:var(--amber); }
+  .sub{
+    color:#a89b85; font-size:14.5px; line-height:1.6; max-width:60ch;
+    margin:0;
+  }
+  .tasklist{
+    margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .tasklist span{
+    font-size:11.5px; border:1px solid var(--line); color:var(--amber-dim);
+    padding:4px 10px; border-radius:20px; letter-spacing:.03em;
+  }
+
+  /* ---------- terminal window ---------- */
+  .terminal{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow: 0 30px 60px -25px rgba(0,0,0,.7), 0 0 0 1px rgba(255,176,46,0.03);
+    overflow:hidden;
+    margin-bottom:28px;
+  }
+  .titlebar{
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel-raised);
+    padding:11px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .dot{ width:11px; height:11px; border-radius:50%; }
+  .dot.r{ background:var(--red-led); }
+  .dot.y{ background:var(--yellow-led); }
+  .dot.g{ background:var(--green-led); }
+  .titlebar .fname{
+    margin-left:8px; font-size:12.5px; color:#a89b85;
+  }
+  .titlebar .status{
+    margin-left:auto; font-size:11px; color:var(--amber-dim);
+    display:flex; align-items:center; gap:6px;
+  }
+  .status .pulse{
+    width:7px; height:7px; border-radius:50%; background:var(--green-led);
+    box-shadow:0 0 8px var(--green-led);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  #log{
+    height:380px;
+    overflow-y:auto;
+    padding:20px 22px;
+    font-size:14px;
+    line-height:1.75;
+  }
+  #log .line{ margin-bottom:2px; white-space:pre-wrap; word-break:break-word; }
+  #log .who-bot{ color:var(--amber); }
+  #log .who-you{ color:#7fd1c9; }
+  #log .txt{ color:var(--cream); }
+  #log .sys{ color:var(--amber-faint); font-style:italic; }
+
+  form#inputRow{
+    display:flex; align-items:center;
+    border-top:1px solid var(--line);
+    padding:12px 16px;
+    background:var(--panel-raised);
+  }
+  form#inputRow .prompt{ color:#7fd1c9; margin-right:10px; font-size:14px; }
+  form#inputRow input{
+    flex:1; background:transparent; border:none; outline:none;
+    color:var(--cream); font-family:var(--font-mono); font-size:14px;
+    caret-color:var(--amber);
+  }
+  form#inputRow input::placeholder{ color:#5a4d3b; }
+  form#inputRow button{
+    background:none; border:1px solid var(--line); color:var(--amber-dim);
+    font-family:var(--font-mono); font-size:11.5px; letter-spacing:.05em;
+    padding:6px 12px; border-radius:5px; cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  form#inputRow button:hover{ border-color:var(--amber-dim); color:var(--amber); }
+
+  .quick{
+    display:flex; gap:8px; flex-wrap:wrap; margin:14px 2px 0;
+  }
+  .quick button{
+    font-family:var(--font-mono); font-size:12px; color:var(--amber-dim);
+    background:var(--panel); border:1px solid var(--line);
+    padding:6px 12px; border-radius:20px; cursor:pointer;
+    transition:all .15s;
+  }
+  .quick button:hover{ color:var(--amber); border-color:var(--amber-dim); background:var(--panel-raised); }
+
+  /* ---------- source panel ---------- */
+  .source{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    margin-top:40px;
+  }
+  .source .titlebar .fname{ color:#a89b85; }
+  .codewrap{
+    max-height:520px; overflow:auto;
+    padding:18px 20px 22px;
+    font-size:12.6px; line-height:1.7;
+  }
+  .codewrap pre{ margin:0; }
+  .ln{ color:#4a3f30; display:inline-block; width:2.2em; text-align:right; margin-right:1.4em; user-select:none; }
+  .kw{ color:#ff9d5c; }
+  .str{ color:#b7d97f; }
+  .com{ color:#5a5040; font-style:italic; }
+  .fn{ color:#7fd1c9; }
+  .num{ color:#e0a568; }
+
+  footer{
+    margin-top:40px; text-align:center; color:#5a4d3b; font-size:12px;
+    letter-spacing:.03em;
+  }
+  footer a{ color:var(--amber-dim); text-decoration:none; }
+  footer a:hover{ color:var(--amber); }
+
+  ::selection{ background:var(--amber); color:#16110c; }
+
+  @media (max-width:600px){
+    #log{ height:320px; }
+    body{ padding:28px 12px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">CodeAlpha &middot; Python Programming Internship</p>
+    <h1>Task 4 &mdash; <span>Basic ChatBot</span></h1>
+    <p class="sub">A rule-based chatbot built with plain if&ndash;elif keyword matching &mdash;
+      no AI models, no external APIs. This page runs the exact same reply logic
+      as <code>chatbot.py</code>, live, in your browser.</p>
+    <div class="tasklist">
+      <span>if&ndash;elif</span><span>functions</span><span>loops</span><span>input / output</span>
+    </div>
+  </header>
+
+  <div class="terminal">
+    <div class="titlebar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="fname">chatbot.py &mdash; running</span>
+      <span class="status"><span class="pulse"></span>live demo</span>
+    </div>
+    <div id="log"></div>
+    <form id="inputRow" autocomplete="off">
+      <span class="prompt">You&gt;</span>
+      <input id="userInput" type="text" placeholder="Say hello, ask how are you, or type help..." />
+      <button type="submit">SEND</button>
+    </form>
+  </div>
+
+  <div class="quick">
+    <button data-msg="hello">hello</button>
+    <button data-msg="how are you">how are you</button>
+    <button data-msg="what is your name">your name</button>
+    <button data-msg="help">help</button>
+    <button data-msg="thanks">thanks</button>
+    <button data-msg="bye">bye</button>
+  </div>
+
+  <div class="source">
+    <div class="titlebar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="fname">chatbot.py &mdash; source</span>
+    </div>
+    <div class="codewrap"><pre id="codeblock"></pre></div>
+  </div>
+
+  <footer>Built for the CodeAlpha internship submission &middot; <a href="#" id="downloadLink">download chatbot.py</a></footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// This mirrors chatbot.py's RESPONSES / get_response / is_exit logic
+// exactly, so the browser demo behaves identically to the Python script.
+// ---------------------------------------------------------------
+const RESPONSES = {
+  "hello": ["Hi!", "Hello there!", "Hey! Good to see you."],
+  "hi": ["Hi!", "Hello there!", "Hey! Good to see you."],
+  "how are you": ["I'm fine, thanks! How about you?"],
+  "your name": ["I'm ChatBot, a simple rule-based assistant."],
+  "help": ["I can chat about basic greetings. Try: hello, how are you, your name, thanks, or bye."],
+  "thanks": ["You're welcome!", "Anytime!"],
+  "thank you": ["You're welcome!", "Anytime!"],
+  "bye": ["Goodbye!", "Bye! Have a great day."],
+};
+
+const FALLBACKS = [
+  "Sorry, I didn't quite get that. Try saying 'help' to see what I can do.",
+  "I'm not sure how to respond to that yet.",
+];
+
+const EXIT_WORDS = ["bye", "goodbye", "exit", "quit"];
+
+function getResponse(userInput){
+  const text = userInput.toLowerCase().trim();
+  for (const keyword in RESPONSES){
+    if (text.includes(keyword)){
+      const replies = RESPONSES[keyword];
+      return replies[Math.floor(Math.random() * replies.length)];
+    }
+  }
+  return FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+}
+
+function isExit(userInput){
+  const text = userInput.toLowerCase().trim();
+  return EXIT_WORDS.some(w => text.includes(w));
+}
+
+const log = document.getElementById('log');
+const form = document.getElementById('inputRow');
+const input = document.getElementById('userInput');
+
+function addLine(who, text, cls){
+  const div = document.createElement('div');
+  div.className = 'line';
+  if (cls === 'sys'){
+    div.innerHTML = `<span class="sys">${text}</span>`;
+  } else {
+    const whoSpan = who === 'You'
+      ? `<span class="who-you">You&gt;</span>`
+      : `<span class="who-bot">ChatBot&gt;</span>`;
+    div.innerHTML = `${whoSpan} <span class="txt">${text}</span>`;
+  }
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function botReply(userText){
+  setTimeout(() => {
+    addLine('ChatBot', getResponse(userText));
+    if (isExit(userText)){
+      setTimeout(() => addLine(null, '--- chat ended. refresh or say hi to start again ---', 'sys'), 350);
+      input.disabled = true;
+      form.querySelector('button').disabled = true;
+    }
+  }, 260);
+}
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const val = input.value.trim();
+  if (!val) return;
+  addLine('You', val);
+  input.value = '';
+  botReply(val);
+});
+
+document.querySelectorAll('.quick button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const msg = btn.dataset.msg;
+    addLine('You', msg);
+    botReply(msg);
+  });
+});
+
+// boot sequence
+addLine(null, "ChatBot: Hi! I'm a simple rule-based chatbot.", 'sys');
+addLine(null, "ChatBot: Type 'bye' anytime to end the chat.", 'sys');
+
+// ---------------------------------------------------------------
+// Render chatbot.py source with light syntax highlighting
+// ---------------------------------------------------------------
+const pySource = `"""
+CodeAlpha Internship - Python Programming Task 4: Basic Chatbot
+-----------------------------------------------------------------
+A simple rule-based chatbot that responds to user input using
+if-elif conditions. No external libraries or AI models are used -
+every reply is matched against a set of predefined keywords.
+
+Key Concepts Used: if-elif, functions, loops, input/output
+"""
+
+import random
+
+RESPONSES = {
+    "hello": ["Hi!", "Hello there!", "Hey! Good to see you."],
+    "hi": ["Hi!", "Hello there!", "Hey! Good to see you."],
+    "how are you": ["I'm fine, thanks! How about you?"],
+    "your name": ["I'm ChatBot, a simple rule-based assistant."],
+    "help": ["I can chat about basic greetings. Try: hello, how are you, "
+              "your name, thanks, or bye."],
+    "thanks": ["You're welcome!", "Anytime!"],
+    "thank you": ["You're welcome!", "Anytime!"],
+    "bye": ["Goodbye!", "Bye! Have a great day."],
+}
+
+FALLBACK_RESPONSES = [
+    "Sorry, I didn't quite get that. Try saying 'help' to see what I can do.",
+    "I'm not sure how to respond to that yet.",
+]
+
+EXIT_KEYWORDS = ("bye", "goodbye", "exit", "quit")
+
+
+def get_response(user_input: str) -> str:
+    """Return a chatbot reply for a single line of user input."""
+    text = user_input.lower().strip()
+
+    for keyword, replies in RESPONSES.items():
+        if keyword in text:
+            return random.choice(replies)
+
+    return random.choice(FALLBACK_RESPONSES)
+
+
+def is_exit(user_input: str) -> bool:
+    """Check whether the user wants to end the conversation."""
+    text = user_input.lower().strip()
+    for word in EXIT_KEYWORDS:
+        if word in text:
+            return True
+    return False
+
+
+def chat():
+    """Main loop: keep chatting until the user says bye/exit/quit."""
+    print("ChatBot: Hi! I'm a simple rule-based chatbot.")
+    print("ChatBot: Type 'bye' anytime to end the chat.\\n")
+
+    while True:
+        user_input = input("You: ")
+
+        if not user_input.strip():
+            print("ChatBot: Say something, I'm listening!")
+            continue
+
+        if is_exit(user_input):
+            print("ChatBot:", get_response(user_input))
+            break
+
+        print("ChatBot:", get_response(user_input))
+
+
+if __name__ == "__main__":
+    chat()
+`;
+
+function highlight(code){
+  return code.split('\n').map((line, i) => {
+    let l = line
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    l = l.replace(/(#.*$)/, '<span class="com">$1</span>');
+    l = l.replace(/\b(import|def|return|if|elif|else|for|in|while|break|continue|True|False|None|not|__name__|__main__)\b/g, '<span class="kw">$1</span>');
+    l = l.replace(/\b(print|input|chat|get_response|is_exit|random\.choice)\b(?=\()/g, '<span class="fn">$1</span>');
+    l = l.replace(/("(?:[^"\\]|\\.)*")/g, '<span class="str">$1</span>');
+    const num = String(i+1).padStart(3,' ');
+    return `<span class="ln">${num}</span>${l}`;
+  }).join('\n');
+}
+document.getElementById('codeblock').innerHTML = highlight(pySource);
+
+// download link
+const blob = new Blob([pySource], {type:'text/x-python'});
+document.getElementById('downloadLink').href = URL.createObjectURL(blob);
+document.getElementById('downloadLink').download = 'chatbot.py';
+</script>
+</body>
+</html>
